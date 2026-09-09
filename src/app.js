@@ -1,11 +1,6 @@
 ```js
 import 'dotenv/config';
-import {
-  Client,
-  Collection,
-  GatewayIntentBits,
-  EmbedBuilder,
-} from 'discord.js';
+import { Client, Collection, GatewayIntentBits, EmbedBuilder } from 'discord.js';
 import { REST } from '@discordjs/rest';
 import express from 'express';
 import cron from 'node-cron';
@@ -13,16 +8,8 @@ import cron from 'node-cron';
 import config from './config/application.js';
 import { initializeDatabase } from './utils/database.js';
 import { getGuildConfig } from './services/config/guildConfig.js';
-import {
-  getServerCounters,
-  saveServerCounters,
-  updateCounter,
-} from './services/serverstatsService.js';
-import {
-  logger,
-  startupLog,
-  shutdownLog,
-} from './utils/logger.js';
+import { getServerCounters, saveServerCounters, updateCounter } from './services/serverstatsService.js';
+import { logger, startupLog, shutdownLog } from './utils/logger.js';
 import { checkBirthdays } from './services/birthdayService.js';
 import { checkGiveaways } from './services/giveawayService.js';
 
@@ -31,26 +18,12 @@ import {
   getTwitchChannel,
 } from './services/twitchService.js';
 
-import {
-  loadCommands,
-  registerCommands as registerSlashCommands,
-} from './handlers/loaders/commandLoader.js';
-
-import {
-  runSafeTask,
-  handleTaskError,
-  ErrorCodes,
-} from './utils/errorHandler.js';
-
+import { loadCommands, registerCommands as registerSlashCommands } from './handlers/loaders/commandLoader.js';
+import { runSafeTask, handleTaskError, ErrorCodes } from './utils/errorHandler.js';
 import { initializeMusic } from './services/music/riffySetup.js';
 import { shutdownMusic } from './services/music/playerHandler.js';
-
 import pkg from '../package.json' with { type: 'json' };
-
-import {
-  EXPECTED_SCHEMA_VERSION,
-  EXPECTED_SCHEMA_LABEL,
-} from './config/database/schemaVersion.js';
+import { EXPECTED_SCHEMA_VERSION, EXPECTED_SCHEMA_LABEL } from './config/database/schemaVersion.js';
 
 class TitanBot extends Client {
   constructor() {
@@ -68,25 +41,23 @@ class TitanBot extends Client {
     });
 
     this.config = config;
-
     this.commands = new Collection();
     this.events = new Collection();
     this.buttons = new Collection();
     this.selectMenus = new Collection();
     this.modals = new Collection();
     this.cooldowns = new Collection();
-
     this.db = null;
 
-    // Twitch state tracking.
-    // null = we haven't checked yet.
-    // true = currently live.
-    // false = currently offline.
+    // Twitch live-state tracking.
+    // null = not checked yet
+    // true = live
+    // false = offline
     this.twitchWasLive = null;
 
-    this.rest = new REST({
-      version: '10',
-    }).setToken(config.bot.token);
+    this.rest = new REST({ version: '10' }).setToken(
+      config.bot.token
+    );
   }
 
   async start() {
@@ -160,9 +131,13 @@ class TitanBot extends Client {
 
       startupLog('Logging into Discord...');
 
-      await this.login(this.config.bot.token);
+      await this.login(
+        this.config.bot.token
+      );
 
-      startupLog('Discord login successful');
+      startupLog(
+        'Discord login successful'
+      );
 
       startupLog(
         'Registering slash commands globally...'
@@ -189,7 +164,7 @@ class TitanBot extends Client {
         `${handlerSummary} | Database: ${databaseMode}`
       );
 
-      // Start scheduled jobs.
+      // Start scheduled jobs, including Twitch monitoring.
       this.setupCronJobs();
     } catch (error) {
       logger.error(
@@ -204,15 +179,18 @@ class TitanBot extends Client {
   startWebServer() {
     const app = express();
 
-    const configuredPort = Number(
-      this.config.api?.port ||
-      process.env.PORT ||
-      3000
-    );
+    const configuredPort =
+      Number(
+        this.config.api?.port ||
+        process.env.PORT ||
+        3000
+      );
 
-    const maxPortRetryAttempts = Number(
-      process.env.PORT_RETRY_ATTEMPTS || 5
-    );
+    const maxPortRetryAttempts =
+      Number(
+        process.env.PORT_RETRY_ATTEMPTS ||
+        5
+      );
 
     const host =
       process.env.WEB_HOST ||
@@ -222,41 +200,45 @@ class TitanBot extends Client {
       this.config.api?.cors?.origin ||
       '*';
 
-    app.use((req, res, next) => {
-      const allowedOrigins =
-        Array.isArray(corsOrigin)
-          ? corsOrigin
-          : [corsOrigin];
+    app.use(
+      (req, res, next) => {
+        const allowedOrigins =
+          Array.isArray(corsOrigin)
+            ? corsOrigin
+            : [corsOrigin];
 
-      const origin =
-        req.headers.origin;
+        const origin =
+          req.headers.origin;
 
-      if (
-        allowedOrigins.includes('*') ||
-        allowedOrigins.includes(origin)
-      ) {
+        if (
+          allowedOrigins.includes('*') ||
+          allowedOrigins.includes(origin)
+        ) {
+          res.header(
+            'Access-Control-Allow-Origin',
+            origin || '*'
+          );
+        }
+
         res.header(
-          'Access-Control-Allow-Origin',
-          origin || '*'
+          'Access-Control-Allow-Methods',
+          'GET, POST, OPTIONS'
         );
+
+        res.header(
+          'Access-Control-Allow-Headers',
+          'Content-Type, Authorization'
+        );
+
+        if (
+          req.method === 'OPTIONS'
+        ) {
+          return res.sendStatus(200);
+        }
+
+        next();
       }
-
-      res.header(
-        'Access-Control-Allow-Methods',
-        'GET, POST, OPTIONS'
-      );
-
-      res.header(
-        'Access-Control-Allow-Headers',
-        'Content-Type, Authorization'
-      );
-
-      if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-      }
-
-      next();
-    });
+    );
 
     const requestCounts =
       new Map();
@@ -269,150 +251,188 @@ class TitanBot extends Client {
       this.config.api?.rateLimit?.max ||
       100;
 
-    app.use((req, res, next) => {
-      const ip = req.ip;
-      const now = Date.now();
-      const windowStart =
-        now - windowMs;
+    app.use(
+      (req, res, next) => {
+        const ip = req.ip;
+        const now = Date.now();
+        const windowStart =
+          now - windowMs;
 
-      if (!requestCounts.has(ip)) {
-        requestCounts.set(ip, []);
-      }
-
-      const times =
-        requestCounts
-          .get(ip)
-          .filter(
-            t => t > windowStart
+        if (
+          !requestCounts.has(ip)
+        ) {
+          requestCounts.set(
+            ip,
+            []
           );
+        }
 
-      if (times.length >= maxRequests) {
-        return res
-          .status(429)
+        const times =
+          requestCounts
+            .get(ip)
+            .filter(
+              t => t > windowStart
+            );
+
+        if (
+          times.length >=
+          maxRequests
+        ) {
+          return res
+            .status(429)
+            .json({
+              error:
+                'Too many requests',
+            });
+        }
+
+        times.push(now);
+
+        requestCounts.set(
+          ip,
+          times
+        );
+
+        next();
+      }
+    );
+
+    app.get(
+      '/health',
+      (req, res) => {
+        const dbStatus =
+          this.db?.getStatus?.() || {
+            isDegraded:
+              'unknown',
+          };
+
+        const status = {
+          status:
+            'healthy',
+
+          timestamp:
+            new Date().toISOString(),
+
+          uptime:
+            process.uptime(),
+
+          database: {
+            connected:
+              dbStatus.connectionType !==
+              'none',
+
+            degraded:
+              dbStatus.isDegraded,
+
+            type:
+              dbStatus.connectionType,
+          },
+        };
+
+        res
+          .status(200)
+          .json(status);
+      }
+    );
+
+    app.get(
+      '/ready',
+      (req, res) => {
+        const dbStatus =
+          this.db?.getStatus?.() || {
+            isDegraded: true,
+            connectionType:
+              'none',
+          };
+
+        const isReady =
+          this.isReady() &&
+          !dbStatus.isDegraded;
+
+        const metrics = {
+          guildCount:
+            this.guilds?.cache?.size ??
+            0,
+
+          commandCount:
+            this.commands?.size ??
+            0,
+
+          database: {
+            mode:
+              dbStatus.connectionType,
+
+            degraded:
+              dbStatus.isDegraded,
+
+            degradedReason:
+              dbStatus.degradedReason ??
+              null,
+          },
+
+          schemaVersion:
+            EXPECTED_SCHEMA_VERSION,
+
+          schemaLabel:
+            EXPECTED_SCHEMA_LABEL,
+        };
+
+        if (isReady) {
+          return res
+            .status(200)
+            .json({
+              ready: true,
+              message:
+                'Bot is ready',
+              metrics,
+            });
+        }
+
+        res
+          .status(503)
           .json({
-            error: 'Too many requests',
+            ready: false,
+
+            reason:
+              !this.isReady()
+                ? 'Bot not Ready'
+                : 'Database degraded',
+
+            metrics,
           });
       }
+    );
 
-      times.push(now);
+    app.get(
+      '/',
+      (req, res) => {
+        res
+          .status(200)
+          .json({
+            message:
+              'TitanBot System Online',
 
-      requestCounts.set(
-        ip,
-        times
-      );
+            version:
+              pkg.version,
 
-      next();
-    });
-
-    app.get('/health', (req, res) => {
-      const dbStatus =
-        this.db?.getStatus?.() || {
-          isDegraded: 'unknown',
-        };
-
-      const status = {
-        status: 'healthy',
-
-        timestamp:
-          new Date().toISOString(),
-
-        uptime:
-          process.uptime(),
-
-        database: {
-          connected:
-            dbStatus.connectionType !== 'none',
-
-          degraded:
-            dbStatus.isDegraded,
-
-          type:
-            dbStatus.connectionType,
-        },
-      };
-
-      res.status(200).json(status);
-    });
-
-    app.get('/ready', (req, res) => {
-      const dbStatus =
-        this.db?.getStatus?.() || {
-          isDegraded: true,
-          connectionType: 'none',
-        };
-
-      const isReady =
-        this.isReady() &&
-        !dbStatus.isDegraded;
-
-      const metrics = {
-        guildCount:
-          this.guilds?.cache?.size ?? 0,
-
-        commandCount:
-          this.commands?.size ?? 0,
-
-        database: {
-          mode:
-            dbStatus.connectionType,
-
-          degraded:
-            dbStatus.isDegraded,
-
-          degradedReason:
-            dbStatus.degradedReason ?? null,
-        },
-
-        schemaVersion:
-          EXPECTED_SCHEMA_VERSION,
-
-        schemaLabel:
-          EXPECTED_SCHEMA_LABEL,
-      };
-
-      if (isReady) {
-        return res.status(200).json({
-          ready: true,
-          message: 'Bot is ready',
-          metrics,
-        });
+            timestamp:
+              new Date().toISOString(),
+          });
       }
-
-      res.status(503).json({
-        ready: false,
-
-        reason:
-          !this.isReady()
-            ? 'Bot not Ready'
-            : 'Database degraded',
-
-        metrics,
-      });
-    });
-
-    app.get('/', (req, res) => {
-      res.status(200).json({
-        message:
-          'TitanBot System Online',
-
-        version:
-          pkg.version,
-
-        timestamp:
-          new Date().toISOString(),
-      });
-    });
+    );
 
     const startServer =
       (port, attempt = 0) => {
-        let hasStartedListening = false;
+        let hasStartedListening =
+          false;
 
         const server =
           app.listen(
             port,
             host,
             () => {
-              hasStartedListening = true;
+              hasStartedListening =
+                true;
 
               this.webServer =
                 server;
@@ -444,15 +464,16 @@ class TitanBot extends Client {
 
             if (
               !hasStartedListening &&
-              errorCode === 'EADDRINUSE' &&
-              attempt < maxPortRetryAttempts
+              errorCode ===
+                'EADDRINUSE' &&
+              attempt <
+                maxPortRetryAttempts
             ) {
               const nextPort =
                 port + 1;
 
               startupLog(
-                `Port ${port} is already in use. ` +
-                `Trying port ${nextPort}...`
+                `Port ${port} is already in use. Trying port ${nextPort}...`
               );
 
               setTimeout(
@@ -469,22 +490,23 @@ class TitanBot extends Client {
 
             if (
               hasStartedListening &&
-              errorCode === 'EADDRINUSE'
+              errorCode ===
+                'EADDRINUSE'
             ) {
               logger.warn(
-                `Web server reported a duplicate bind warning ` +
-                `on ${host}:${port}, but the bot remains online.`
+                `Web server reported a duplicate bind warning on ${host}:${port}, but the bot remains online.`
               );
 
               return;
             }
 
             logger.error(
-              `❌ Web server error on port ${port} ` +
-              `(${errorCode}): ${errorMessage}`
+              `❌ Web server error on port ${port} (${errorCode}): ${errorMessage}`
             );
 
-            if (!hasStartedListening) {
+            if (
+              !hasStartedListening
+            ) {
               process.exit(1);
             }
           }
@@ -583,15 +605,14 @@ class TitanBot extends Client {
 
             .setDescription(
               `🚨 **THE CAT HAS STARTED STREAMING!** 🚨\n\n` +
-              `Booboo is live on Twitch! ` +
-              `Grab your snacks 🍪, ` +
-              `summon the Kitty Crew 🐈‍⬛, ` +
-              `and come cause some chaos. 💜💀`
+              `Booboo is live on Twitch! Grab your snacks 🍪, ` +
+              `summon the Kitty Crew 🐈‍⬛, and come cause some chaos. 💜💀`
             )
 
             .addFields(
               {
-                name: '🎮 Stream',
+                name:
+                  '🎮 Stream',
 
                 value:
                   stream.title ||
@@ -599,7 +620,8 @@ class TitanBot extends Client {
               },
 
               {
-                name: '🎲 Game',
+                name:
+                  '🎲 Game',
 
                 value:
                   stream.game_name ||
@@ -614,9 +636,7 @@ class TitanBot extends Client {
             .setTimestamp();
 
         // IMPORTANT:
-        // Keep the object syntax exactly like this.
-        // This fixes the previous "Unexpected identifier 'embeds'"
-        // syntax error.
+        // The comma after the Twitch URL is required.
         await channel.send({
           content:
             `🔴 **@everyone — BOOBOO IS LIVE!** 🐈‍⬛💜\n` +
@@ -653,7 +673,6 @@ class TitanBot extends Client {
   setupCronJobs() {
     cron.schedule(
       '0 6 * * *',
-
       runSafeTask(
         'birthday_check',
         () =>
@@ -663,7 +682,6 @@ class TitanBot extends Client {
 
     cron.schedule(
       '* * * * *',
-
       runSafeTask(
         'giveaway_check',
         () =>
@@ -673,7 +691,6 @@ class TitanBot extends Client {
 
     cron.schedule(
       '*/15 * * * *',
-
       runSafeTask(
         'counter_update',
         () =>
@@ -681,10 +698,9 @@ class TitanBot extends Client {
       )
     );
 
-    // Check Twitch every minute.
+    // Check Twitch once every minute.
     cron.schedule(
       '* * * * *',
-
       runSafeTask(
         'twitch_live_check',
         () =>
@@ -768,7 +784,8 @@ class TitanBot extends Client {
 
         // Save cleaned counters if any were orphaned.
         if (
-          orphanedCounters.length > 0
+          orphanedCounters.length >
+          0
         ) {
           await saveServerCounters(
             this,
@@ -777,9 +794,8 @@ class TitanBot extends Client {
           );
 
           logger.info(
-            `Cleaned up ${orphanedCounters.length} ` +
-            `orphaned counter(s) from guild ${guildId} ` +
-            `during scheduled update`
+            `Cleaned up ${orphanedCounters.length} orphaned counter(s) ` +
+            `from guild ${guildId} during scheduled update`
           );
         }
       } catch (error) {
@@ -825,9 +841,13 @@ class TitanBot extends Client {
           );
 
         const loaderFn =
-          handler.type.startsWith('named:')
+          handler.type.startsWith(
+            'named:'
+          )
             ? module[
-                handler.type.split(':')[1]
+                handler.type.split(
+                  ':'
+                )[1]
               ]
             : module.default;
 
@@ -1085,13 +1105,11 @@ try {
           // not a reason to take the bot down.
           handleTaskError(
             'unhandled_rejection',
-
             reason instanceof Error
               ? reason
               : new Error(
                   String(reason)
                 ),
-
             {
               errorCode:
                 ErrorCodes.UNHANDLED_REJECTION,
@@ -1127,34 +1145,30 @@ try {
 export default TitanBot;
 ```
 
-### Also keep the Twitch service we just made
+### Now do exactly this
 
-Your `src/services/twitchService.js` should be the complete version from my previous message.
+1. Open **GitHub → `src/app.js`**
+2. Click the **pencil/Edit** button.
+3. Select **all existing code** and delete it.
+4. Paste the code above.
+5. Click **Commit changes**.
+6. Let Railway redeploy.
 
-Then:
+**Do not change `twitchService.js` right now.**
 
-**1. Save `app.js`**
-
-**2. Commit to GitHub**
-
-**3. Let Railway redeploy**
-
-**4. Do not make any more code changes yet.**
-
-The first thing I want from the new Railway log is whether you get:
+After Railway finishes, paste the **new startup log** here. We're looking for the bot to get past:
 
 ```text
-Twitch configuration: CLIENT_ID=FOUND | CLIENT_SECRET=FOUND
+Starting TitanBot...
+Initializing database...
+Loading commands...
+Discord login successful
 ```
 
-If you get that, we're past the credential problem and the bot can actually talk to Twitch.
-
-If you instead get:
+and, most importantly, something like:
 
 ```text
-Twitch configuration: CLIENT_ID=MISSING | CLIENT_SECRET=MISSING
+🐈‍⬛ Twitch live monitoring enabled.
 ```
 
-then we'll know with certainty that the remaining problem is Railway environment injection—not your Twitch code.
-
-And importantly, the `embeds: [embed]` syntax is now correctly inside the `channel.send({ ... })` object, so that particular crash is fixed.
+Then we'll deal with the Twitch credentials/API issue if it appears.

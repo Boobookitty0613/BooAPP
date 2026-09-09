@@ -101,12 +101,33 @@ class TitanBot extends Client {
         `ONLINE ✅ | ${this.commands.size} commands loaded | ${handlerSummary} | Database: ${databaseMode}`
       );
 
-      this.setupCronJobs();
-    } catch (error) {
-      logger.error('Failed to start bot:', error);
-      process.exit(1);
-    }
-  }
+      this.setupCronJobs() {
+  cron.schedule(
+    '0 6 * * *',
+    runSafeTask('birthday_check', () => checkBirthdays(this))
+  );
+
+  cron.schedule(
+    '* * * * *',
+    runSafeTask('giveaway_check', () => checkGiveaways(this))
+  );
+
+  cron.schedule(
+    '*/15 * * * *',
+    runSafeTask('counter_update', () => this.updateAllCounters())
+  );
+
+  // Check Twitch once every minute.
+  cron.schedule(
+    '* * * * *',
+    runSafeTask('twitch_live_check', () => this.checkTwitchLive())
+  );
+
+  startupLog('🐈‍⬛ Twitch live monitoring enabled.');
+
+  // Check Twitch immediately on startup instead of waiting for the next minute.
+  runSafeTask('twitch_live_initial_check', () => this.checkTwitchLive())();
+}
 
   startWebServer() {
     const app = express();

@@ -1,4 +1,3 @@
-﻿```js
 import 'dotenv/config';
 import { Client, Collection, GatewayIntentBits, EmbedBuilder } from 'discord.js';
 import { REST } from '@discordjs/rest';
@@ -653,4 +652,3 @@ try {
 }
 
 export default TitanBot;
-```

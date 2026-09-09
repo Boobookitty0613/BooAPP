@@ -11,7 +11,10 @@ import { getServerCounters, saveServerCounters, updateCounter } from './services
 import { logger, startupLog, shutdownLog } from './utils/logger.js';
 import { checkBirthdays } from './services/birthdayService.js';
 import { checkGiveaways } from './services/giveawayService.js';
-import { getTwitchStream } from './services/twitchService.js';
+import {
+  getTwitchStream,
+  getTwitchChannel,
+} from './services/twitchService.js';
 import { loadCommands, registerCommands as registerSlashCommands } from './handlers/loaders/commandLoader.js';
 import { runSafeTask, handleTaskError, ErrorCodes } from './utils/errorHandler.js';
 import { initializeMusic } from './services/music/riffySetup.js';
@@ -417,15 +420,15 @@ class TitanBot extends Client {
                 'Mystery Game',
             }
           )
-          .setURL(
-            `https://twitch.tv/${process.env.TWITCH_CHANNEL}`
-          )
+         .setURL(
+  `https://twitch.tv/${getTwitchChannel()}`
+)
           .setTimestamp();
 
         await channel.send({
           content:
             `🔴 **@everyone — BOOBOO IS LIVE!** 🐈‍⬛💜\n` +
-            `https://twitch.tv/${process.env.TWITCH_CHANNEL}`,
+            `https://twitch.tv/${getTwitchChannel()}`
 
           embeds: [embed],
         });

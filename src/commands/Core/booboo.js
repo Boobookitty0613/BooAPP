@@ -6,7 +6,7 @@ import { InteractionHelper } from '../../utils/interactionHelper.js';
 export default {
     data: new SlashCommandBuilder()
         .setName('booboo')
-        .setDescription('Summon Booboo the chaos cat'),
+        .setDescription.('Summon Booboo the chaos cat 🐈‍⬛')
 
     async execute(interaction) {
         try {

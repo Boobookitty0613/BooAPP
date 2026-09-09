@@ -3,6 +3,10 @@ import { logger } from '../utils/logger.js';
 const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
 const TWITCH_API_URL = 'https://api.twitch.tv/helix/streams';
 
+// Your public Twitch channel.
+// Railway can override this with TWITCH_CHANNEL if it is available.
+const DEFAULT_TWITCH_CHANNEL = 'boobookitty0613';
+
 let accessToken = null;
 let tokenExpiresAt = 0;
 
@@ -11,10 +15,9 @@ async function getAccessToken() {
     const clientSecret = process.env.TWITCH_CLIENT_SECRET?.trim();
 
     logger.info(
-        'Twitch configuration: ' +
+        `Twitch configuration: ` +
         `Client ID ${clientId ? 'FOUND' : 'MISSING'} | ` +
-        `Client Secret ${clientSecret ? 'FOUND' : 'MISSING'} | ` +
-        `Channel ${process.env.TWITCH_CHANNEL ? 'FOUND' : 'MISSING'}`
+        `Client Secret ${clientSecret ? 'FOUND' : 'MISSING'}`
     );
 
     if (!clientId || !clientSecret) {
@@ -45,6 +48,7 @@ async function getAccessToken() {
     const data = await response.json();
 
     accessToken = data.access_token;
+
     tokenExpiresAt =
         Date.now() + ((data.expires_in - 60) * 1000);
 
@@ -52,21 +56,30 @@ async function getAccessToken() {
 }
 
 export async function getTwitchStream() {
-    const rawChannel = process.env.TWITCH_CHANNEL;
+    // Use Railway's variable if available.
+    // Otherwise automatically use your public Twitch username.
+    const channel =
+        process.env.TWITCH_CHANNEL?.trim() ||
+        DEFAULT_TWITCH_CHANNEL;
 
-    if (!rawChannel || !rawChannel.trim()) {
-        throw new Error('Missing TWITCH_CHANNEL');
+    if (process.env.TWITCH_CHANNEL) {
+        logger.info('Twitch channel: using TWITCH_CHANNEL from Railway.');
+    } else {
+        logger.warn(
+            'TWITCH_CHANNEL was not provided by Railway. Using default channel: boobookitty0613.'
+        );
     }
 
-    const channel = rawChannel.trim();
     const token = await getAccessToken();
 
     const response = await fetch(
         `${TWITCH_API_URL}?user_login=${encodeURIComponent(channel)}`,
         {
             headers: {
-                'Client-ID': process.env.TWITCH_CLIENT_ID.trim(),
-                Authorization: `Bearer ${token}`,
+                'Client-ID':
+                    process.env.TWITCH_CLIENT_ID.trim(),
+                Authorization:
+                    `Bearer ${token}`,
             },
         }
     );

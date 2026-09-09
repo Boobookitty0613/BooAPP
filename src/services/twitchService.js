@@ -98,4 +98,3 @@ export async function isTwitchLive() {
         return false;
     }
 }
-```

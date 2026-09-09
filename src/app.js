@@ -1,4 +1,3 @@
-```js
 import 'dotenv/config';
 import { Client, Collection, GatewayIntentBits, EmbedBuilder } from 'discord.js';
 import { REST } from '@discordjs/rest';
@@ -49,10 +48,6 @@ class TitanBot extends Client {
     this.cooldowns = new Collection();
     this.db = null;
 
-    // Twitch live-state tracking.
-    // null = not checked yet
-    // true = live
-    // false = offline
     this.twitchWasLive = null;
 
     this.rest = new REST({ version: '10' }).setToken(
@@ -75,7 +70,6 @@ class TitanBot extends Client {
 
       this.db = dbInstance.db;
 
-      // Check database status and report.
       const dbStatus =
         this.db.getStatus();
 
@@ -105,7 +99,9 @@ class TitanBot extends Client {
         logger.warn('');
       } else {
         startupLog(
-          `✅ Database Status: ${dbStatus.connectionType} (fully operational)`
+          'Database Status: ' +
+          dbStatus.connectionType +
+          ' (fully operational)'
         );
       }
 
@@ -164,7 +160,6 @@ class TitanBot extends Client {
         `${handlerSummary} | Database: ${databaseMode}`
       );
 
-      // Start scheduled jobs, including Twitch monitoring.
       this.setupCronJobs();
     } catch (error) {
       logger.error(
@@ -527,8 +522,6 @@ class TitanBot extends Client {
       const isLive =
         Boolean(stream);
 
-      // First check establishes the current state
-      // without sending a notification.
       if (
         this.twitchWasLive === null
       ) {
@@ -546,7 +539,6 @@ class TitanBot extends Client {
         return;
       }
 
-      // Nothing changed.
       if (
         isLive ===
         this.twitchWasLive
@@ -554,7 +546,6 @@ class TitanBot extends Client {
         return;
       }
 
-      // Stream just went LIVE.
       if (
         isLive &&
         !this.twitchWasLive
@@ -602,13 +593,11 @@ class TitanBot extends Client {
             .setTitle(
               '🔴🐈‍⬛ BOOBOO IS LIVE! 🐈‍⬛🔴'
             )
-
             .setDescription(
               `🚨 **THE CAT HAS STARTED STREAMING!** 🚨\n\n` +
               `Booboo is live on Twitch! Grab your snacks 🍪, ` +
               `summon the Kitty Crew 🐈‍⬛, and come cause some chaos. 💜💀`
             )
-
             .addFields(
               {
                 name:
@@ -628,15 +617,11 @@ class TitanBot extends Client {
                   'Mystery Game',
               }
             )
-
             .setURL(
               `https://twitch.tv/${twitchChannel}`
             )
-
             .setTimestamp();
 
-        // IMPORTANT:
-        // The comma after the Twitch URL is required.
         await channel.send({
           content:
             `🔴 **@everyone — BOOBOO IS LIVE!** 🐈‍⬛💜\n` +
@@ -650,7 +635,6 @@ class TitanBot extends Client {
         );
       }
 
-      // Stream just went OFFLINE.
       if (
         !isLive &&
         this.twitchWasLive
@@ -698,7 +682,6 @@ class TitanBot extends Client {
       )
     );
 
-    // Check Twitch once every minute.
     cron.schedule(
       '* * * * *',
       runSafeTask(
@@ -712,7 +695,6 @@ class TitanBot extends Client {
       '🐈‍⬛ Twitch live monitoring enabled.'
     );
 
-    // Check Twitch immediately on startup.
     runSafeTask(
       'twitch_live_initial_check',
       () =>
@@ -782,7 +764,6 @@ class TitanBot extends Client {
           }
         }
 
-        // Save cleaned counters if any were orphaned.
         if (
           orphanedCounters.length >
           0
@@ -966,7 +947,6 @@ class TitanBot extends Client {
         );
       }
 
-      // Close database connection.
       if (
         this.db &&
         this.db.db
@@ -1057,8 +1037,6 @@ try {
       process.on(
         'uncaughtException',
         error => {
-          // Process state may be corrupt after an uncaught throw;
-          // log and shut down cleanly.
           handleTaskError(
             'uncaught_exception',
             error,
@@ -1101,8 +1079,6 @@ try {
             return;
           }
 
-          // A stray rejection is a bug to fix,
-          // not a reason to take the bot down.
           handleTaskError(
             'unhandled_rejection',
             reason instanceof Error
@@ -1143,32 +1119,3 @@ try {
 }
 
 export default TitanBot;
-```
-
-### Now do exactly this
-
-1. Open **GitHub → `src/app.js`**
-2. Click the **pencil/Edit** button.
-3. Select **all existing code** and delete it.
-4. Paste the code above.
-5. Click **Commit changes**.
-6. Let Railway redeploy.
-
-**Do not change `twitchService.js` right now.**
-
-After Railway finishes, paste the **new startup log** here. We're looking for the bot to get past:
-
-```text
-Starting TitanBot...
-Initializing database...
-Loading commands...
-Discord login successful
-```
-
-and, most importantly, something like:
-
-```text
-🐈‍⬛ Twitch live monitoring enabled.
-```
-
-Then we'll deal with the Twitch credentials/API issue if it appears.

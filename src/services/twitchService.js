@@ -3,39 +3,81 @@ import { logger } from '../utils/logger.js';
 const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
 const TWITCH_API_URL = 'https://api.twitch.tv/helix/streams';
 
-// Your public Twitch channel name.
-// This is used automatically if Railway does not provide TWITCH_CHANNEL.
 const DEFAULT_TWITCH_CHANNEL = 'boobookitty0613';
 
 let accessToken = null;
 let tokenExpiresAt = 0;
 
-async function getAccessToken() {
-    const clientId = process.env.TWITCH_CLIENT_ID?.trim();
-    const clientSecret = process.env.TWITCH_CLIENT_SECRET?.trim();
+function getTwitchConfig() {
+    const clientId = process.env.TWITCH_CLIENT_ID?.trim() || '';
+    const clientSecret = process.env.TWITCH_CLIENT_SECRET?.trim() || '';
+    const channel =
+        process.env.TWITCH_CHANNEL?.trim() ||
+        DEFAULT_TWITCH_CHANNEL;
 
-    // SAFE diagnostic.
-    // This only reports YES/NO and NEVER prints your credentials.
+    return {
+        clientId,
+        clientSecret,
+        channel,
+    };
+}
+
+export function getTwitchChannel() {
+    return getTwitchConfig().channel;
+}
+
+function validateTwitchConfig() {
+    const {
+        clientId,
+        clientSecret,
+    } = getTwitchConfig();
+
     logger.info(
-        'Railway Twitch variables: ' +
-        `CLIENT_ID=${clientId ? 'YES' : 'NO'} | ` +
-        `CLIENT_SECRET=${clientSecret ? 'YES' : 'NO'} | ` +
-        `CHANNEL=${process.env.TWITCH_CHANNEL ? 'YES' : 'NO'}`
+        `Twitch configuration: ` +
+        `CLIENT_ID=${clientId ? 'FOUND' : 'MISSING'} | ` +
+        `CLIENT_SECRET=${clientSecret ? 'FOUND' : 'MISSING'}`
     );
 
-    if (!clientId || !clientSecret) {
+    if (!clientId) {
         throw new Error(
-            'Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET'
+            'TWITCH_CLIENT_ID is missing from the running environment.'
         );
     }
 
-    // Reuse the token until it is close to expiring.
-    if (accessToken && Date.now() < tokenExpiresAt) {
+    if (!clientSecret) {
+        throw new Error(
+            'TWITCH_CLIENT_SECRET is missing from the running environment.'
+        );
+    }
+
+    return {
+        clientId,
+        clientSecret,
+    };
+}
+
+async function getAccessToken() {
+    const {
+        clientId,
+        clientSecret,
+    } = validateTwitchConfig();
+
+    if (
+        accessToken &&
+        Date.now() < tokenExpiresAt
+    ) {
         return accessToken;
     }
 
+    logger.info(
+        'Requesting Twitch API access token...'
+    );
+
     const response = await fetch(
-        `${TWITCH_TOKEN_URL}?client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&grant_type=client_credentials`,
+        `${TWITCH_TOKEN_URL}?` +
+        `client_id=${encodeURIComponent(clientId)}` +
+        `&client_secret=${encodeURIComponent(clientSecret)}` +
+        `&grant_type=client_credentials`,
         {
             method: 'POST',
         }
@@ -45,42 +87,56 @@ async function getAccessToken() {
         const errorText = await response.text();
 
         throw new Error(
-            `Twitch token request failed: ${response.status} ${errorText}`
+            `Twitch token request failed: ` +
+            `${response.status} ${errorText}`
         );
     }
 
     const data = await response.json();
 
+    if (!data.access_token) {
+        throw new Error(
+            'Twitch token response did not contain an access token.'
+        );
+    }
+
     accessToken = data.access_token;
 
     tokenExpiresAt =
-        Date.now() + ((data.expires_in - 60) * 1000);
+        Date.now() +
+        Math.max(
+            (Number(data.expires_in || 3600) - 60) * 1000,
+            60000
+        );
+
+    logger.info(
+        '✅ Twitch API access token acquired.'
+    );
 
     return accessToken;
 }
 
 export async function getTwitchStream() {
-    // Use Railway's TWITCH_CHANNEL when available.
-    // Fall back to your public Twitch username if Railway
-    // does not provide the variable.
-    const channel =
-        process.env.TWITCH_CHANNEL?.trim() ||
-        DEFAULT_TWITCH_CHANNEL;
+    const {
+        clientId,
+        channel,
+    } = {
+        ...getTwitchConfig(),
+        ...validateTwitchConfig(),
+    };
 
     if (process.env.TWITCH_CHANNEL?.trim()) {
         logger.info(
-            'Twitch channel configuration: Railway variable FOUND.'
+            `Twitch channel: ${channel}`
         );
     } else {
         logger.warn(
-            'Twitch channel configuration: Railway variable MISSING. Using default boobookitty0613.'
+            `TWITCH_CHANNEL is not available. ` +
+            `Using default channel: ${DEFAULT_TWITCH_CHANNEL}`
         );
     }
 
     const token = await getAccessToken();
-
-    const clientId =
-        process.env.TWITCH_CLIENT_ID?.trim();
 
     const response = await fetch(
         `${TWITCH_API_URL}?user_login=${encodeURIComponent(channel)}`,
@@ -97,13 +153,22 @@ export async function getTwitchStream() {
         const errorText = await response.text();
 
         throw new Error(
-            `Twitch API request failed: ${response.status} ${errorText}`
+            `Twitch API request failed: ` +
+            `${response.status} ${errorText}`
         );
     }
 
     const data = await response.json();
 
-    return data.data?.[0] ?? null;
+    const stream = data.data?.[0] ?? null;
+
+    if (stream) {
+        logger.info(
+            `🔴 Twitch stream detected: ${stream.title || 'Live'}`
+        );
+    }
+
+    return stream;
 }
 
 export async function isTwitchLive() {

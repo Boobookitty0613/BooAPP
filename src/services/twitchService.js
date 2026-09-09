@@ -1,4 +1,4 @@
-import logger from '../utils/logger.js';
+import { logger } from '../utils/logger.js';
 
 const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
 const TWITCH_API_URL = 'https://api.twitch.tv/helix/streams';

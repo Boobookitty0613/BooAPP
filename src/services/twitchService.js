@@ -11,12 +11,11 @@ async function getAccessToken() {
     const clientId = process.env.TWITCH_CLIENT_ID?.trim();
     const clientSecret = process.env.TWITCH_CLIENT_SECRET?.trim();
 
-    // Safe diagnostic — does NOT print your credentials.
     logger.info(
-        `Twitch configuration check: ` +
-        `CLIENT_ID=${clientId ? 'FOUND' : 'MISSING'} | ` +
-        `CLIENT_SECRET=${clientSecret ? 'FOUND' : 'MISSING'} | ` +
-        `CHANNEL=${process.env.TWITCH_CHANNEL ? 'FOUND' : 'MISSING'}`
+        'Twitch configuration: ' +
+        `Client ID ${clientId ? 'FOUND' : 'MISSING'} | ` +
+        `Client Secret ${clientSecret ? 'FOUND' : 'MISSING'} | ` +
+        `Channel ${process.env.TWITCH_CHANNEL ? 'FOUND' : 'MISSING'}`
     );
 
     if (!clientId || !clientSecret) {
@@ -47,10 +46,8 @@ async function getAccessToken() {
     const data = await response.json();
 
     accessToken = data.access_token;
-
     tokenExpiresAt =
-        Date.now() +
-        ((data.expires_in - 60) * 1000);
+        Date.now() + ((data.expires_in - 60) * 1000);
 
     return accessToken;
 }
@@ -58,40 +55,18 @@ async function getAccessToken() {
 export async function getTwitchStream() {
     const rawChannel = process.env.TWITCH_CHANNEL;
 
-    // Safe diagnostic.
-    // This intentionally NEVER prints the actual Twitch username.
-    logger.info(
-        `Twitch channel environment variable: ${
-            rawChannel
-                ? 'FOUND'
-                : 'MISSING'
-        }`
-    );
-
-    if (!rawChannel) {
-        throw new Error(
-            'Missing TWITCH_CHANNEL'
-        );
+    if (!rawChannel || !rawChannel.trim()) {
+        throw new Error('Missing TWITCH_CHANNEL');
     }
 
     const channel = rawChannel.trim();
-
-    if (!channel) {
-        throw new Error(
-            'TWITCH_CHANNEL is empty'
-        );
-    }
-
     const token = await getAccessToken();
-
-    const clientId =
-        process.env.TWITCH_CLIENT_ID?.trim();
 
     const response = await fetch(
         `${TWITCH_API_URL}?user_login=${encodeURIComponent(channel)}`,
         {
             headers: {
-                'Client-ID': clientId,
+                'Client-ID': process.env.TWITCH_CLIENT_ID.trim(),
                 Authorization: `Bearer ${token}`,
             },
         }
